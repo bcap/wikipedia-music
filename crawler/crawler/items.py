@@ -5,7 +5,9 @@
 
 from scrapy.item import Item, Field
 
-class CrawlerItem(Item):
-    # define the fields for your item here like:
-    # name = Field()
-    pass
+class MusicInfoItem(Item):
+    name = Field()
+    url = Field()
+    origins = Field()
+    derivatives = Field()
+    subgenres = Field()

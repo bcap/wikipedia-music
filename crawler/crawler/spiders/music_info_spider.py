@@ -1,36 +1,45 @@
+from sets import Set
+from urlparse import urljoin
+from scrapy.http import Request
 from scrapy.spider import BaseSpider
 from scrapy.selector import HtmlXPathSelector
+from crawler.items import MusicInfoItem
 
 class MusicInfoSpider(BaseSpider):
+    wikipediaDomain = "en.wikipedia.org"
+    visitedURLs = Set()
+    
     name = "music-info"
-    allowed_domains = ["en.wikipedia.org"]
+    allowed_domains = [wikipediaDomain]
     start_urls = [
         "http://en.wikipedia.org/wiki/Hard_rock",
-        "http://en.wikipedia.org/wiki/Drum_and_bass"
+#        "http://en.wikipedia.org/wiki/Drum_and_bass"
     ]
 
     def parse(self, response):
         hxs = HtmlXPathSelector(response)
+        item = MusicInfoItem()
+        item['url'] = response.url
+        item['name'] = hxs.select('//*[@id="firstHeading"]/span/text()').extract()[0]
+        item['origins'] = self.parseGenres(response, hxs.select('//*[@id="mw-content-text"]/table[@class="infobox hlist"]/tr[th/text() = "Stylistic origins"]/td/a'))
+        item['derivatives'] = self.parseGenres(response, hxs.select('//*[@id="mw-content-text"]/table[@class="infobox hlist"]/tr[th/text() = "Derivative forms"]/td/a')) 
+        item['subgenres'] = self.parseGenres(response, hxs.select('//*[@id="mw-content-text"]/table[@class="infobox hlist"]/tr[preceding-sibling::*[1]/th/text() = "Subgenres"]/td/a'))
         
-        analisedStyle = hxs.select('//*[@id="firstHeading"]/span/text()').extract()[0]
+        self.visitedURLs.add(response.url)
 
-        print "%s Origins:" % (analisedStyle)
-        origins = hxs.select('//*[@id="mw-content-text"]/table[@class="infobox hlist"]/tr[th/text() = "Stylistic origins"]/td/a')   
-        for origin in origins:
-            style = origin.select('@title').extract()[0]
-            link = origin.select('@href').extract()[0]
-            print "\t%s (%s)" % (style, link)
+        gatheredURLs = Set([i['url'] for i in Set(item['origins']) | Set(item['subgenres']) | Set(item['derivatives'])])
+        nonVisitedURLs = (self.visitedURLs - gatheredURLs) | (gatheredURLs - self.visitedURLs)
 
-        print "%s Subgenres:" % (analisedStyle)
-        subgenres = hxs.select('//*[@id="mw-content-text"]/table[@class="infobox hlist"]/tr[preceding-sibling::*[1]/th/text() = "Subgenres"]/td/a')
-        for subgenre in subgenres:
-            style = subgenre.select('@title').extract()[0]
-            link = subgenre.select('@href').extract()[0]
-            print "\t%s (%s)" % (style, link)
+        for url in nonVisitedURLs:
+            yield Request(url, callback = self.parse)
 
-        print "%s Derivatives:" % (analisedStyle)
-        derivatives = hxs.select('//*[@id="mw-content-text"]/table[@class="infobox hlist"]/tr[th/text() = "Derivative forms"]/td/a') 
-        for derivative in derivatives:
-            style = derivative.select('@title').extract()[0]
-            link = derivative.select('@href').extract()[0]
-            print "\t%s (%s)" % (style, link)
+        yield item
+
+    def parseGenres(self, response, selector):
+        result = []
+        for selected in selector:
+            item = MusicInfoItem()
+            item['name'] = selected.select('@title').extract()[0]
+            item['url'] = urljoin(response.url, selected.select('@href').extract()[0])
+            result.append(item)
+        return result
