@@ -11,6 +11,10 @@ BOT_NAME = 'crawler'
 SPIDER_MODULES = ['crawler.spiders']
 NEWSPIDER_MODULE = 'crawler.spiders'
 
+ITEM_PIPELINES = [
+    'crawler.pipelines.DotPipeline',
+]
+
 DOWNLOAD_DELAY = 0.25
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
