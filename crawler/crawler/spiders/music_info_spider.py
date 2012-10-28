@@ -4,6 +4,7 @@ from scrapy.http import Request
 from scrapy.spider import BaseSpider
 from scrapy.selector import HtmlXPathSelector
 from crawler.items import MusicInfoItem
+from scrapy import log
 
 class MusicInfoSpider(BaseSpider):
     wikipediaDomain = "en.wikipedia.org"
@@ -17,6 +18,8 @@ class MusicInfoSpider(BaseSpider):
     ]
 
     def parse(self, response):
+        self.visitedURLs.add(response.url)
+
         hxs = HtmlXPathSelector(response)
         item = MusicInfoItem()
         item['url'] = response.url
@@ -25,13 +28,13 @@ class MusicInfoSpider(BaseSpider):
         item['derivatives'] = self.parseGenres(response, hxs.select('//*[@id="mw-content-text"]/table[@class="infobox hlist"]/tr[th/text() = "Derivative forms"]/td/a')) 
         item['subgenres'] = self.parseGenres(response, hxs.select('//*[@id="mw-content-text"]/table[@class="infobox hlist"]/tr[preceding-sibling::*[1]/th/text() = "Subgenres"]/td/a'))
         
-        self.visitedURLs.add(response.url)
+        log.msg("Processed %d genres" % (len(self.visitedURLs)), level = log.INFO)
 
         gatheredURLs = Set([i['url'] for i in Set(item['origins']) | Set(item['subgenres']) | Set(item['derivatives'])])
-        nonVisitedURLs = (self.visitedURLs - gatheredURLs) | (gatheredURLs - self.visitedURLs)
-
-        for url in nonVisitedURLs:
-            yield Request(url, callback = self.parse)
+       
+        for url in gatheredURLs:
+            if url not in self.visitedURLs:
+                yield Request(url, callback = self.parse)
 
         yield item
 
